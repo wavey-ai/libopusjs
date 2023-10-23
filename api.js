@@ -1,88 +1,68 @@
-// Encoder
-
-// create encoder
-// channels: 1-2
-// samplerate: 8000,12000,16000,24000,48000
-// bitrate: see Opus recommended bitrates
-// frame_size: frame size in milliseconds (2.5,5,10,20,40,60), 20 is recommended
-// voice_optimization: true/false 
-function Encoder(channels, samplerate, bitrate, frame_size, voice_optimization)
-{
-  this.enc = Module._Encoder_new.apply(null, arguments);
-  this.out = Module._String_new();
+function Encoder(channels, samplerate, bitrate, frame_size) {
+  this.enc = Module._Encoder_new(channels, samplerate, bitrate, frame_size);
+  this.encodedBuffer = null;
 }
 
-// free encoder memory
-Encoder.prototype.destroy = function()
-{ 
-  Module._Encoder_delete(this.enc); 
-  Module._String_delete(this.out);
+Encoder.prototype.destroy = function() {
+  Module._Encoder_delete(this.enc);
 }
 
-// add samples to the encoder buffer
-// samples: Int16Array of interleaved (if multiple channels) samples
-Encoder.prototype.input = function(samples)
-{
-  var ptr = Module._malloc(samples.length*samples.BYTES_PER_ELEMENT);
-  var pdata = new Uint8Array(Module.HEAPU8.buffer, ptr, samples.length*samples.BYTES_PER_ELEMENT);
-  pdata.set(new Uint8Array(samples.buffer, samples.byteOffset, samples.length*samples.BYTES_PER_ELEMENT));
+Encoder.prototype.enc_frame = function(samples) {
+  const sampleBytes = 2; // 2 bytes for int16_t
+  const ptr = Module._malloc(samples.length * sampleBytes);
+  const pdata = new Int16Array(Module.HEAP16.buffer, ptr, samples.length);
+  pdata.set(samples);
 
-  Module._Encoder_input(this.enc, ptr, samples.length);
+  const encodedBufferPtr = Module._malloc(4); // 4 bytes for uint32_t
+
+  const encodedBufferSize = Module._Encoder_enc_frame(this.enc, ptr, samples.length, encodedBufferPtr);
+  const encodedBufferAddr = Module.HEAPU32[encodedBufferPtr >> 2];
+
   Module._free(ptr);
+  Module._free(encodedBufferPtr);
+
+  if (encodedBufferSize > 0) {
+    const encodedData = new Uint8Array(Module.HEAPU8.buffer, encodedBufferAddr, encodedBufferSize);
+    Module._free(encodedBufferAddr);
+    return { ok: true, encodedData };
+  } else {
+    return { ok: false, encodedData: null };
+  }
 }
 
-// output the next encoded packet
-// return Uint8Array (valid until the next output call) or null if there is no packet to output
-Encoder.prototype.output = function()
-{
-  var ok = Module._Encoder_output(this.enc, this.out);
-  if(ok)
-    return new Uint8Array(Module.HEAPU8.buffer, Module._String_data(this.out), Module._String_size(this.out));
+function Decoder(channels, samplerate, frame_size) {
+  this.dec = Module._Decoder_new(channels, samplerate, frame_size);
+  this.frame_size = frame_size;
+  this.channels = channels;
 }
 
-// Decoder
-
-// create decoder
-// channels and samplerate should match the encoder options
-function Decoder(channels, samplerate)
-{
-  this.dec = Module._Decoder_new.apply(null, arguments);
-  this.out = Module._Int16Array_new();
+Decoder.prototype.destroy = function() {
+  Module._Decoder_delete(this.dec);
 }
 
-// free decoder memory
-Decoder.prototype.destroy = function()
-{ 
-  Module._Decoder_delete(this.dec); 
-  Module._Int16Array_delete(this.out);
-}
+Decoder.prototype.dec_frame = function(data) {
+  const sampleBytes = 2; // 2 bytes for int16_t
+  const bufferPtr = Module._malloc(this.frame_size * this.channels * sampleBytes);
+  const bufferView = new Int16Array(Module.HEAP16.buffer, bufferPtr, this.frame_size * this.channels);
 
-// add packet to the decoder buffer
-// packet: Uint8Array
-Decoder.prototype.input = function(packet)
-{
-  var ptr = Module._malloc(packet.length*packet.BYTES_PER_ELEMENT);
-  var pdata = new Uint8Array(Module.HEAPU8.buffer, ptr, packet.length*packet.BYTES_PER_ELEMENT);
-  pdata.set(new Uint8Array(packet.buffer, packet.byteOffset, packet.length*packet.BYTES_PER_ELEMENT));
+  const dataPtr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, dataPtr);
 
-  Module._Decoder_input(this.dec, ptr, packet.length);
-  Module._free(ptr);
-}
+  const decodedSize = Module._dec_frame(dataPtr, data.length, bufferPtr);
 
-// output the next decoded samples
-// return samples (interleaved if multiple channels) as Int16Array (valid until the next output call) or null if there is no output
-Decoder.prototype.output = function()
-{
-  var ok = Module._Decoder_output(this.dec, this.out);
-  if(ok)
-    return new Int16Array(Module.HEAPU8.buffer, Module._Int16Array_data(this.out), Module._Int16Array_size(this.out));
-}
+  const output = Array.from(bufferView);
 
+  Module._free(bufferPtr);
+  Module._free(dataPtr);
 
-//export objects
+  return { decodedSize, output };
+};
+
+// Export objects
 Module.Encoder = Encoder;
 Module.Decoder = Decoder;
 
-//make the module global if not using nodejs
-if(Module["ENVIRONMENT"] != "NODE")
+// Make the module global if not using Node.js
+if (Module["ENVIRONMENT"] !== "NODE") {
   libopus = Module;
+}

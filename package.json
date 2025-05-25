@@ -1,0 +1,37 @@
+{
+  "name": "opus-wasm-dual",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "release/libopus.js",
+  "module": "release/libopus.mjs",
+  "exports": {
+    ".": {
+      "import": "./release/libopus.mjs",
+      "require": "./release/libopus.js"
+    },
+    "./es": "./release/libopus.mjs",
+    "./classic": "./release/libopus.js",
+    "./wasm": "./release/libopus.wasm"
+  },
+  "files": [
+    "release/libopus.js",
+    "release/libopus.mjs",
+    "release/libopus.wasm"
+  ],
+  "scripts": {
+    "build": "./build.sh",
+    "build:release": "./build.sh -O3 -s ASSERTIONS=0",
+    "build:debug": "./build.sh -g -s ASSERTIONS=1",
+    "test": "node test-sine-wave.js",
+    "test:full": "./run-test.sh"
+  },
+  "keywords": [
+    "opus",
+    "audio",
+    "encoding",
+    "wasm",
+    "webpack",
+    "web-worker"
+  ],
+  "description": "Opus codec for WebAssembly with dual loading support (ES modules + importScripts)"
+}

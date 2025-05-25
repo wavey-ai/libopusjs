@@ -1,4 +1,11 @@
+.PHONY: init
+init:
+	git submodule update --init --recursive --remote
+
+.PHONY: opus
+opus:
+	cd opus && ./autogen.sh && emconfigure ./configure --disable-shared --enable-static --disable-doc --disable-extra-programs && emmake make
 
 .PHONY: build
 build:
-	./build.sh -O3 -s WASM=1 -s ENVIRONMENT="web,worker" -s EXPORTED_FUNCTIONS=_malloc,_free -s ALLOW_MEMORY_GROWTH=1
+	./build.sh

@@ -1,6 +1,7 @@
 #include <emscripten.h>
 #include <opus.h>
 #include <iostream>
+#include <cstdlib>
 
 class Encoder {
 public:
@@ -11,12 +12,16 @@ public:
 
     if (enc == NULL) {
       // Handle error: maybe throw an exception or set an error flag
+      return;
     }
+    
+    // Set the bitrate
+    opus_encoder_ctl(enc, OPUS_SET_BITRATE(bitrate));
   }
 
-  size_t enc_frame(const int16_t *data, int size, char **encodedBuffer) {
-    size_t max_size = frame_size * channels * 2;  // frame_size * channels * sizeof(int16_t)
-    return opus_encode(enc, data, frame_size, (unsigned char *)*encodedBuffer, max_size);
+  size_t enc_frame(const int16_t *data, int size, unsigned char *encodedBuffer, int maxSize) {
+    if (!enc) return 0;
+    return opus_encode(enc, data, frame_size, encodedBuffer, maxSize);
   }
 
   ~Encoder() {
@@ -41,8 +46,9 @@ public:
     }
   }
 
-  size_t dec_frame(const char *data, size_t size, int16_t *decodedBuffer) {
-    return opus_decode(dec, (const unsigned char *)data, size, decodedBuffer, frame_size, 0);
+  size_t dec_frame(const unsigned char *data, size_t size, int16_t *decodedBuffer) {
+    if (!dec) return 0;
+    return opus_decode(dec, data, size, decodedBuffer, frame_size, 0);
   }
 
   ~Decoder() {
@@ -64,8 +70,8 @@ EMSCRIPTEN_KEEPALIVE void Encoder_delete(Encoder *self) {
   delete self;
 }
 
-EMSCRIPTEN_KEEPALIVE size_t Encoder_enc_frame(Encoder *self, const int16_t *data, int size, char **encodedBuffer) {
-  return self->enc_frame(data, size, encodedBuffer);
+EMSCRIPTEN_KEEPALIVE size_t Encoder_enc_frame(Encoder *self, const int16_t *data, int size, unsigned char *encodedBuffer, int maxSize) {
+  return self->enc_frame(data, size, encodedBuffer, maxSize);
 }
 
 EMSCRIPTEN_KEEPALIVE Decoder *Decoder_new(int channels, long int samplerate, int frame_size) {
@@ -76,7 +82,16 @@ EMSCRIPTEN_KEEPALIVE void Decoder_delete(Decoder *self) {
   delete self;
 }
 
-EMSCRIPTEN_KEEPALIVE size_t Decoder_dec_frame(Decoder *self, const char *data, size_t size, int16_t *decodedBuffer) {
+EMSCRIPTEN_KEEPALIVE size_t Decoder_dec_frame(Decoder *self, const unsigned char *data, size_t size, int16_t *decodedBuffer) {
   return self->dec_frame(data, size, decodedBuffer);
+}
+
+// Memory management functions
+EMSCRIPTEN_KEEPALIVE void* opus_malloc(size_t size) {
+  return malloc(size);
+}
+
+EMSCRIPTEN_KEEPALIVE void opus_free(void* ptr) {
+  free(ptr);
 }
 }

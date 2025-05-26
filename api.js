@@ -8,8 +8,6 @@ function Encoder(ch, rate, br, fsz) {
 
 Encoder.prototype.destroy = function () {
   Module._Encoder_delete(this.ptr)
-  Module._opus_free(this.in)
-  Module._opus_free(this.out)
 }
 
 Encoder.prototype.enc_frame = function (samples) {
@@ -29,8 +27,6 @@ function Decoder(ch, rate, fsz) {
 
 Decoder.prototype.destroy = function () {
   Module._Decoder_delete(this.ptr)
-  Module._opus_free(this.in)
-  Module._opus_free(this.out)
 }
 
 Decoder.prototype.dec_frame = function (data) {

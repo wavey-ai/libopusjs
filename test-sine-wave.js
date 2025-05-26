@@ -200,8 +200,8 @@ async function testOpusEncoding() {
     console.log('')
     console.log('Test completed successfully!')
     console.log('')
-    console.log(`ffplay -f s16le -ar ${SAMPLE_RATE} -ac ${CHANNELS} original-sine.pcm`)
-    console.log(`ffplay -f s16le -ar ${SAMPLE_RATE} -ac ${CHANNELS} decoded-sine.pcm`)
+    console.log(`ffplay -f s16le -ar ${SAMPLE_RATE} -ch_layout stereo original-sine.pcm`)
+    console.log(`ffplay -f s16le -ar ${SAMPLE_RATE} -ch_layout stereo decoded-sine.pcm`)
   } catch (error) {
     console.error('✗ Test failed:', error)
     process.exit(1)

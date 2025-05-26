@@ -1,68 +1,41 @@
-function Encoder(channels, samplerate, bitrate, frame_size) {
-  this.enc = Module._Encoder_new(channels, samplerate, bitrate, frame_size);
-  this.encodedBuffer = null;
+function Encoder(ch, rate, br, fsz) {
+  this.ptr = Module._Encoder_new(ch, rate, br, fsz)
+  this.fsz = fsz
+  this.ch = ch
+  this.in = Module._opus_malloc(fsz * ch * 2)
+  this.out = Module._opus_malloc(4000)
 }
 
-Encoder.prototype.destroy = function() {
-  Module._Encoder_delete(this.enc);
+Encoder.prototype.destroy = function () {
+  Module._Encoder_delete(this.ptr)
 }
 
-Encoder.prototype.enc_frame = function(samples) {
-  const sampleBytes = 2; // 2 bytes for int16_t
-  const ptr = Module._malloc(samples.length * sampleBytes);
-  const pdata = new Int16Array(Module.HEAP16.buffer, ptr, samples.length);
-  pdata.set(samples);
-
-  const encodedBufferPtr = Module._malloc(4); // 4 bytes for uint32_t
-
-  const encodedBufferSize = Module._Encoder_enc_frame(this.enc, ptr, samples.length, encodedBufferPtr);
-  const encodedBufferAddr = Module.HEAPU32[encodedBufferPtr >> 2];
-
-  Module._free(ptr);
-  Module._free(encodedBufferPtr);
-
-  if (encodedBufferSize > 0) {
-    const encodedData = new Uint8Array(Module.HEAPU8.buffer, encodedBufferAddr, encodedBufferSize);
-    Module._free(encodedBufferAddr);
-    return { ok: true, encodedData };
-  } else {
-    return { ok: false, encodedData: null };
-  }
+Encoder.prototype.enc_frame = function (samples) {
+  Module.HEAP16.set(samples, this.in >> 1)
+  const n = Module._Encoder_enc_frame(this.ptr, this.in, samples.length, this.out, 4000)
+  if (n <= 0) return { ok: false, encodedData: null }
+  return { ok: true, encodedData: Module.HEAPU8.slice(this.out, this.out + n) }
 }
 
-function Decoder(channels, samplerate, frame_size) {
-  this.dec = Module._Decoder_new(channels, samplerate, frame_size);
-  this.frame_size = frame_size;
-  this.channels = channels;
+function Decoder(ch, rate, fsz) {
+  this.ptr = Module._Decoder_new(ch, rate, fsz)
+  this.fsz = fsz
+  this.ch = ch
+  this.in = Module._opus_malloc(4000)
+  this.out = Module._opus_malloc(fsz * ch * 2)
 }
 
-Decoder.prototype.destroy = function() {
-  Module._Decoder_delete(this.dec);
+Decoder.prototype.destroy = function () {
+  Module._Decoder_delete(this.ptr)
 }
 
-Decoder.prototype.dec_frame = function(data) {
-  const sampleBytes = 2; // 2 bytes for int16_t
-  const bufferPtr = Module._malloc(this.frame_size * this.channels * sampleBytes);
-  const bufferView = new Int16Array(Module.HEAP16.buffer, bufferPtr, this.frame_size * this.channels);
-
-  const dataPtr = Module._malloc(data.length);
-  Module.HEAPU8.set(data, dataPtr);
-
-  const decodedSize = Module._dec_frame(dataPtr, data.length, bufferPtr);
-
-  const output = Array.from(bufferView);
-
-  Module._free(bufferPtr);
-  Module._free(dataPtr);
-
-  return { decodedSize, output };
-};
-
-// Export objects
-Module.Encoder = Encoder;
-Module.Decoder = Decoder;
-
-// Make the module global if not using Node.js
-if (Module["ENVIRONMENT"] !== "NODE") {
-  libopus = Module;
+Decoder.prototype.dec_frame = function (data) {
+  Module.HEAPU8.set(data, this.in)
+  const d = Module._Decoder_dec_frame(this.ptr, this.in, data.length, this.out)
+  if (d <= 0) return { decodedSize: 0, output: [] }
+  const view = Module.HEAP16.subarray(this.out >> 1, (this.out >> 1) + d * this.ch)
+  return { decodedSize: d, output: Array.from(view) }
 }
+
+Module.Encoder = Encoder
+Module.Decoder = Decoder

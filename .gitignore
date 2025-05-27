@@ -1,1 +1,2 @@
-*.pcm
+testdata/*.enc
+testdata/*_dec.pcm

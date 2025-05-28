@@ -27,7 +27,8 @@ for (let i = 0; i < frames; i++) {
   const r = enc.enc_frame(pcm.subarray(s, s + SPF))
   if (r.ok) chunks.push(r.encodedData)
 }
-fs.writeFileSync(ENC, Buffer.concat(chunks.map(c => Buffer.from(c))))
+const encodedBuf = Buffer.concat(chunks.map(c => Buffer.from(c)))
+fs.writeFileSync(ENC, encodedBuf)
 
 const out = new Int16Array(frames * SPF)
 let off = 0
@@ -44,8 +45,14 @@ enc.destroy()
 dec.destroy()
 
 const layout = CH === 1 ? 'mono' : 'stereo'
+
 console.log('\nPlay decoded PCM:')
 console.log(`ffplay -f s16le -ar ${SR} -ch_layout ${layout} ${DEC}\n`)
 console.log('Play encoded Opus:')
 console.log(`ffmpeg -f opus -ar ${SR} -ch_layout ${layout} -i ${ENC} -f s16le - | ffplay -f s16le -ar ${SR} -ch_layout ${layout} -`)
+
+const originalSize = pcmBuf.byteLength
+const encodedSize = encodedBuf.length
+const ratio = (originalSize / encodedSize).toFixed(2)
+console.log(`\nCompression ratio: ${ratio}:1 (original ${originalSize} bytes → encoded ${encodedSize} bytes)`)
 
